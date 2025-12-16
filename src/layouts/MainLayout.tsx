@@ -23,7 +23,8 @@ import {
   Factory,
   AlertTriangle,
   Wrench,
-  CheckCircle2
+  CheckCircle2,
+  Briefcase
 } from 'lucide-react'
 
 interface MainLayoutProps {
@@ -41,6 +42,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [crmDropdownOpen, setCrmDropdownOpen] = useState(
+    location.pathname === '/customers' ||
+    location.pathname.startsWith('/customers/') ||
+    location.pathname === '/inquiries' ||
+    location.pathname.startsWith('/inquiries/') ||
+    location.pathname.startsWith('/quotations') ||
+    location.pathname === '/job-cards' ||
+    location.pathname.startsWith('/job-cards/')
+  )
   const [mastersDropdownOpen, setMastersDropdownOpen] = useState(
     location.pathname === '/customer-masters' || 
     location.pathname === '/job-card-masters' ||
@@ -67,26 +77,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
       name: 'Dashboard',
       path: '/dashboard',
       icon: <LayoutDashboard className="h-5 w-5" />
-    },
-    {
-      name: 'Customers',
-      path: '/customers',
-      icon: <Users className="h-5 w-5" />
-    },
-    {
-      name: 'Inquiries',
-      path: '/inquiries',
-      icon: <Users className="h-5 w-5" />
-    },
-    {
-      name: 'Quotations',
-      path: '/quotations',
-      icon: <FileText className="h-5 w-5" />
-    },
-    {
-      name: 'Job Cards',
-      path: '/job-cards',
-      icon: <ClipboardList className="h-5 w-5" />
     }
   ]
 
@@ -186,6 +176,102 @@ export default function MainLayout({ children }: MainLayoutProps) {
               </Button>
             )
           })}
+
+          {/* CRM Dropdown */}
+          <div className="space-y-1">
+            <Button
+              variant="ghost"
+              onClick={() => setCrmDropdownOpen(!crmDropdownOpen)}
+              className={`
+                w-full justify-start space-x-3 transition-all duration-200
+                ${sidebarOpen ? 'px-3' : 'px-2'}
+                text-slate-700 hover:text-slate-900 hover:bg-slate-50
+              `}
+            >
+              <div className="text-slate-500">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              {sidebarOpen && (
+                <>
+                  <span className="font-medium">CRM</span>
+                  <ChevronDown className={`h-4 w-4 ml-auto transition-transform ${crmDropdownOpen ? 'rotate-180' : ''}`} />
+                </>
+              )}
+            </Button>
+
+            {sidebarOpen && crmDropdownOpen && (
+              <div className="ml-4 space-y-0.5 max-h-96 overflow-y-auto">
+                <Button
+                  key="Customers"
+                  variant="ghost"
+                  onClick={() => navigate('/customers')}
+                  className={`
+                    w-full justify-start space-x-2 transition-all duration-200
+                    px-2 py-2 text-sm
+                    ${location.pathname === '/customers' || location.pathname.startsWith('/customers/')
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
+                  `}
+                >
+                  <div className={`${location.pathname === '/customers' || location.pathname.startsWith('/customers/') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium truncate">Customers</span>
+                </Button>
+                <Button
+                  key="Inquiries"
+                  variant="ghost"
+                  onClick={() => navigate('/inquiries')}
+                  className={`
+                    w-full justify-start space-x-2 transition-all duration-200
+                    px-2 py-2 text-sm
+                    ${location.pathname === '/inquiries' || location.pathname.startsWith('/inquiries/')
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
+                  `}
+                >
+                  <div className={`${location.pathname === '/inquiries' || location.pathname.startsWith('/inquiries/') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium truncate">Inquiries</span>
+                </Button>
+                <Button
+                  key="Quotations"
+                  variant="ghost"
+                  onClick={() => navigate('/quotations')}
+                  className={`
+                    w-full justify-start space-x-2 transition-all duration-200
+                    px-2 py-2 text-sm
+                    ${location.pathname.startsWith('/quotations')
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
+                  `}
+                >
+                  <div className={`${location.pathname.startsWith('/quotations') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium truncate">Quotations</span>
+                </Button>
+                <Button
+                  key="Job Cards"
+                  variant="ghost"
+                  onClick={() => navigate('/job-cards')}
+                  className={`
+                    w-full justify-start space-x-2 transition-all duration-200
+                    px-2 py-2 text-sm
+                    ${location.pathname === '/job-cards' || location.pathname.startsWith('/job-cards/')
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
+                  `}
+                >
+                  <div className={`${location.pathname === '/job-cards' || location.pathname.startsWith('/job-cards/') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                    <ClipboardList className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium truncate">Job Cards</span>
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Design Dropdown */}
           <div className="space-y-1">
