@@ -23,8 +23,11 @@ import {
   Factory,
   AlertTriangle,
   Wrench,
-  CheckCircle2,
-  Briefcase
+  ShoppingCart,
+  Package,
+  Building2,
+  CheckSquare,
+  Truck
 } from 'lucide-react'
 
 interface MainLayoutProps {
@@ -42,15 +45,6 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [crmDropdownOpen, setCrmDropdownOpen] = useState(
-    location.pathname === '/customers' ||
-    location.pathname.startsWith('/customers/') ||
-    location.pathname === '/inquiries' ||
-    location.pathname.startsWith('/inquiries/') ||
-    location.pathname.startsWith('/quotations') ||
-    location.pathname === '/job-cards' ||
-    location.pathname.startsWith('/job-cards/')
-  )
   const [mastersDropdownOpen, setMastersDropdownOpen] = useState(
     location.pathname === '/customer-masters' || 
     location.pathname === '/job-card-masters' ||
@@ -66,6 +60,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
   const [maintenanceDropdownOpen, setMaintenanceDropdownOpen] = useState(
     location.pathname.startsWith('/clit-sheet')
   )
+  const [crmDropdownOpen, setCrmDropdownOpen] = useState(
+    location.pathname === '/customers' ||
+    location.pathname.startsWith('/inquiries') ||
+    location.pathname.startsWith('/quotations') ||
+    location.pathname.startsWith('/job-cards')
+  )
   const [qcDropdownOpen, setQcDropdownOpen] = useState(
     location.pathname.startsWith('/qc-inspection')
   )
@@ -77,6 +77,21 @@ export default function MainLayout({ children }: MainLayoutProps) {
       name: 'Dashboard',
       path: '/dashboard',
       icon: <LayoutDashboard className="h-5 w-5" />
+    },
+    {
+      name: 'Purchase',
+      path: '/purchase',
+      icon: <ShoppingCart className="h-5 w-5" />
+    },
+    {
+      name: 'Inventory',
+      path: '/inventory',
+      icon: <Package className="h-5 w-5" />
+    },
+    {
+      name: 'Subcontracting',
+      path: '/subcontracting',
+      icon: <Truck className="h-5 w-5" />
     }
   ]
 
@@ -93,10 +108,13 @@ export default function MainLayout({ children }: MainLayoutProps) {
     if (location.pathname.startsWith('/shift-handovers')) return 'Shift Handover'
     if (location.pathname.startsWith('/rejection-logbook')) return 'Rejection & Rework Logbook'
     if (location.pathname.startsWith('/clit-sheet')) return 'CLIT Sheet'
-    if (location.pathname.startsWith('/qc-inspection')) return 'QC Inspection'
     if (location.pathname === '/customer-masters') return 'Customer Masters'
     if (location.pathname === '/job-card-masters') return 'Job Card Master'
     if (location.pathname === '/maintenance-master') return 'Maintenance Master'
+    if (location.pathname.startsWith('/qc-inspection')) return 'QC Inspection'
+    if (location.pathname.startsWith('/purchase')) return 'Purchase Management'
+    if (location.pathname.startsWith('/inventory')) return 'Inventory Management'
+    if (location.pathname.startsWith('/subcontracting')) return 'Subcontracting Management'
     return 'Keytex ERP'
   }
 
@@ -185,11 +203,22 @@ export default function MainLayout({ children }: MainLayoutProps) {
               className={`
                 w-full justify-start space-x-3 transition-all duration-200
                 ${sidebarOpen ? 'px-3' : 'px-2'}
-                text-slate-700 hover:text-slate-900 hover:bg-slate-50
+                ${(location.pathname === '/customers' ||
+                   location.pathname.startsWith('/inquiries') ||
+                   location.pathname.startsWith('/quotations') ||
+                   location.pathname.startsWith('/job-cards'))
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-50'
+                }
               `}
             >
-              <div className="text-slate-500">
-                <Briefcase className="h-5 w-5" />
+              <div className={(location.pathname === '/customers' ||
+                   location.pathname.startsWith('/inquiries') ||
+                   location.pathname.startsWith('/quotations') ||
+                   location.pathname.startsWith('/job-cards'))
+                  ? 'text-blue-600'
+                  : 'text-slate-500'}>
+                <Building2 className="h-5 w-5" />
               </div>
               {sidebarOpen && (
                 <>
@@ -225,12 +254,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   className={`
                     w-full justify-start space-x-2 transition-all duration-200
                     px-2 py-2 text-sm
-                    ${location.pathname === '/inquiries' || location.pathname.startsWith('/inquiries/')
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                    ${location.pathname.startsWith('/inquiries') || location.pathname === '/inquiry'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800' 
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
                   `}
                 >
-                  <div className={`${location.pathname === '/inquiries' || location.pathname.startsWith('/inquiries/') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                  <div className={`${location.pathname.startsWith('/inquiries') || location.pathname === '/inquiry' ? 'text-emerald-600' : 'text-slate-500'} flex-shrink-0`}>
                     <Users className="h-4 w-4" />
                   </div>
                   <span className="font-medium truncate">Inquiries</span>
@@ -243,11 +272,11 @@ export default function MainLayout({ children }: MainLayoutProps) {
                     w-full justify-start space-x-2 transition-all duration-200
                     px-2 py-2 text-sm
                     ${location.pathname.startsWith('/quotations')
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800' 
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
                   `}
                 >
-                  <div className={`${location.pathname.startsWith('/quotations') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                  <div className={`${location.pathname.startsWith('/quotations') ? 'text-indigo-600' : 'text-slate-500'} flex-shrink-0`}>
                     <FileText className="h-4 w-4" />
                   </div>
                   <span className="font-medium truncate">Quotations</span>
@@ -259,12 +288,12 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   className={`
                     w-full justify-start space-x-2 transition-all duration-200
                     px-2 py-2 text-sm
-                    ${location.pathname === '/job-cards' || location.pathname.startsWith('/job-cards/')
-                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:text-blue-800' 
+                    ${location.pathname.startsWith('/job-cards')
+                      ? 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 hover:text-purple-800' 
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}
                   `}
                 >
-                  <div className={`${location.pathname === '/job-cards' || location.pathname.startsWith('/job-cards/') ? 'text-blue-600' : 'text-slate-500'} flex-shrink-0`}>
+                  <div className={`${location.pathname.startsWith('/job-cards') ? 'text-purple-600' : 'text-slate-500'} flex-shrink-0`}>
                     <ClipboardList className="h-4 w-4" />
                   </div>
                   <span className="font-medium truncate">Job Cards</span>
@@ -518,11 +547,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
               className={`
                 w-full justify-start space-x-3 transition-all duration-200
                 ${sidebarOpen ? 'px-3' : 'px-2'}
-                text-slate-700 hover:text-slate-900 hover:bg-slate-50
+                ${location.pathname.startsWith('/qc-inspection')
+                  ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 hover:text-green-800'
+                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-50'}
               `}
             >
-              <div className="text-slate-500">
-                <CheckCircle2 className="h-5 w-5" />
+              <div className={location.pathname.startsWith('/qc-inspection')
+                ? 'text-green-600'
+                : 'text-slate-500'}>
+                <CheckSquare className="h-5 w-5" />
               </div>
               {sidebarOpen && (
                 <>
@@ -547,7 +580,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
                   `}
                 >
                   <div className={`${location.pathname.startsWith('/qc-inspection') ? 'text-green-600' : 'text-slate-500'} flex-shrink-0`}>
-                    <ClipboardList className="h-4 w-4" />
+                    <CheckSquare className="h-4 w-4" />
                   </div>
                   <span className="font-medium truncate">QC Inspection</span>
                 </Button>

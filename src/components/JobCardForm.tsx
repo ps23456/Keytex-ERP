@@ -1,5 +1,5 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { ReactNode, useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react'
+import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from './ui/button'
@@ -15,6 +15,7 @@ import {
 } from './ui/select'
 import { getJobCardTemplate, initializeJobCardTemplates } from '../lib/jobCardTemplates'
 import { useMasters } from '../hooks/useMasters'
+import { loadInventoryItems, reduceInventoryStock, InventoryItem, InventoryType } from '../lib/inventoryStorage'
 
 const STATUS_OPTIONS = ['Planned', 'In Progress', 'On Hold', 'Completed']
 const DESIGN_CHOICES = ['KM', 'CUST', '2D', '3D'] as const
@@ -191,6 +192,13 @@ export default function JobCardForm({
 }: JobCardFormProps) {
   const [submitted, setSubmitted] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState<string | null>(null)
+  const prevClientNameRef = useRef<string>('')
+  const hasInitializedItemSelection = useRef(false)
+  const [shouldShowDropdown, setShouldShowDropdown] = useState(false)
+  const [debouncedClientName, setDebouncedClientName] = useState<string>(initialData?.sale?.clientName || '')
+  const stableJobNumberRef = useRef<string>('')
+  const initialDataRef = useRef(initialData)
   
   // Initialize job card templates
   useEffect(() => {
@@ -199,6 +207,28 @@ export default function JobCardForm({
 
   // Fetch job card templates from master data
   const { records: templateRecords } = useMasters('job_card_template')
+  
+  // Load purchase records to get client names
+  const { records: purchaseRecords } = useMasters('purchase')
+  
+  // Create a map of purchaseId to clientName
+  const purchaseClientMap = useMemo(() => {
+    const map = new Map<string, string>()
+    purchaseRecords?.forEach((record: any) => {
+      const purchaseId = record.id || record.purchase_id
+      if (purchaseId && record.clientName) {
+        map.set(String(purchaseId), record.clientName)
+      }
+    })
+    return map
+  }, [purchaseRecords])
+  
+  // Load all inventory items - make it stable to avoid re-renders
+  const allInventoryItems = useMemo(() => {
+    const rawMaterialItems = loadInventoryItems('raw_material', false) // Only completed items
+    const toolItems = loadInventoryItems('tool', false) // Only completed items
+    return [...rawMaterialItems, ...toolItems]
+  }, []) // Empty deps - only load once, reload manually when needed
   
   // Convert master records to template format
   const jobCardTemplates = useMemo(() => {
@@ -232,8 +262,15 @@ export default function JobCardForm({
     }
   }, [initialData])
 
+  // Generate stable job number only once
+  useEffect(() => {
+    if (!stableJobNumberRef.current) {
+      stableJobNumberRef.current = initialData?.jobNumber || generateJobNumber()
+    }
+  }, [initialData?.jobNumber])
+
   const defaultValues = useMemo<JobCardFormData>(() => {
-    const generatedJobNumber = initialData?.jobNumber || generateJobNumber()
+    const generatedJobNumber = initialData?.jobNumber || stableJobNumberRef.current || generateJobNumber()
     return {
       jobNumber: generatedJobNumber,
       srNumber: initialData?.srNumber || '1',
@@ -297,7 +334,7 @@ export default function JobCardForm({
       },
       operations: buildOperationDefaults(
         initialData?.operations,
-        (initialData as any)?.jobCardTemplateId || selectedTemplateId
+        (initialData as any)?.jobCardTemplateId || ''
       ),
       finalInspection: {
         notes: initialData?.finalInspection?.notes || '',
@@ -306,7 +343,7 @@ export default function JobCardForm({
         approvedBy: initialData?.finalInspection?.approvedBy || '',
       },
     }
-  }, [initialData])
+  }, [initialData]) // selectedTemplateId removed - it's handled separately via useEffect
 
   const {
     control,
@@ -320,8 +357,37 @@ export default function JobCardForm({
   } = useForm<JobCardFormData>({
     resolver: zodResolver(jobCardSchema),
     defaultValues,
-    mode: 'onChange',
+    mode: 'onBlur', // Validate on blur, not on every keystroke
+    shouldUnregister: false, // Keep form values in DOM to prevent focus loss
+    shouldFocusError: false, // Don't auto-focus errors to prevent focus loss
   })
+  
+  // Initialize preview state and debounced client name from initial data - only run when initialData changes
+  useEffect(() => {
+    // Only initialize if initialData changed (new edit/new create)
+    if (initialDataRef.current !== initialData) {
+      if (initialData) {
+        const clientName = initialData.sale?.clientName || ''
+        setPreviewState({
+          jobNumber: initialData.jobNumber || '',
+          clientName: clientName,
+          contactPerson: initialData.sale?.contactPerson || '',
+        })
+        setDebouncedClientName(clientName)
+        prevClientNameRef.current = clientName
+      } else {
+        // Clear state when initialData becomes undefined
+        setPreviewState({
+          jobNumber: '',
+          clientName: '',
+          contactPerson: '',
+        })
+        setDebouncedClientName('')
+        prevClientNameRef.current = ''
+      }
+      initialDataRef.current = initialData
+    }
+  }, [initialData])
 
   const { fields: operationFields, replace: replaceOperations } = useFieldArray({
     control,
@@ -352,9 +418,10 @@ export default function JobCardForm({
     }
   }
   
-  // Auto-load operations when template is pre-selected from quotation
+  // Auto-load operations when template is pre-selected from quotation - use ref to avoid re-running
+  const hasLoadedOperationsRef = useRef(false)
   useEffect(() => {
-    if (selectedTemplateId && initialData && (initialData as any).jobCardTemplateId === selectedTemplateId) {
+    if (selectedTemplateId && initialData && (initialData as any).jobCardTemplateId === selectedTemplateId && !hasLoadedOperationsRef.current) {
       const template = getJobCardTemplate(selectedTemplateId)
       if (template && template.operations && template.operations.length > 0) {
         const currentOps = getValues('operations')
@@ -377,18 +444,109 @@ export default function JobCardForm({
             qc: '',
           }))
           replaceOperations(newOperations)
+          hasLoadedOperationsRef.current = true
         }
       }
     }
-  }, [selectedTemplateId, initialData, replaceOperations, getValues])
+    // Reset flag when initialData changes
+    if (initialDataRef.current !== initialData) {
+      hasLoadedOperationsRef.current = false
+    }
+  }, [selectedTemplateId, initialData, replaceOperations]) // Removed getValues from deps
 
+  // CRITICAL FIX: Only watch fields that MUST trigger UI updates (status dropdown, design ownership)
+  // DO NOT watch input fields - it causes re-renders that lose focus on every keystroke
+  const designOwnership = useWatch({ control, name: 'design.ownership', defaultValue: [] }) || []
+  const watchedStatus = useWatch({ control, name: 'status' })
+  
+  // For preview: Use state that only updates on blur, NEVER during typing
+  const [previewState, setPreviewState] = useState({
+    jobNumber: initialData?.jobNumber || '',
+    clientName: initialData?.sale?.clientName || '',
+    contactPerson: initialData?.sale?.contactPerson || '',
+  })
+  
+  // Update preview state ONLY on blur - never during typing
+  const updatePreviewOnBlur = useCallback(() => {
+    const currentValues = getValues()
+    setPreviewState({
+      jobNumber: currentValues.jobNumber || '',
+      clientName: currentValues.sale?.clientName || '',
+      contactPerson: currentValues.sale?.contactPerson || '',
+    })
+    // Also update debounced client name for inventory filtering
+    setDebouncedClientName(currentValues.sale?.clientName || '')
+  }, [getValues])
+  
+  // Create preview object from state
+  const preview = useMemo(() => ({
+    jobNumber: previewState.jobNumber,
+    sale: {
+      clientName: previewState.clientName,
+      contactPerson: previewState.contactPerson
+    }
+  }), [previewState])
+
+  // Filter inventory items by debounced client name
+  const filteredInventoryItems = useMemo(() => {
+    if (!debouncedClientName || debouncedClientName.trim() === '') {
+      return []
+    }
+    
+    const clientNameLower = debouncedClientName.toLowerCase().trim()
+    return allInventoryItems.filter((item) => {
+      if (!item.purchaseId) return false
+      const itemClientName = purchaseClientMap.get(String(item.purchaseId))
+      return itemClientName?.toLowerCase() === clientNameLower
+    })
+  }, [debouncedClientName, allInventoryItems, purchaseClientMap])
+
+  // Set selectedInventoryItemId when editing - only run once when initialData has itemName
   useEffect(() => {
-    reset(defaultValues)
-  }, [defaultValues, reset])
+    // Only run this effect once when editing, not on every keystroke
+    if (!hasInitializedItemSelection.current && initialData?.sale?.itemName) {
+      const itemName = initialData.sale.itemName
+      // Search in all items (not filtered) to avoid dependency on clientName changes
+      const matchingItem = allInventoryItems.find(item => 
+        item.item.toLowerCase() === itemName.toLowerCase().trim()
+      )
+      if (matchingItem) {
+        setSelectedInventoryItemId(matchingItem.id)
+        hasInitializedItemSelection.current = true
+      } else {
+        // Mark as initialized even if no match to avoid retrying
+        hasInitializedItemSelection.current = true
+      }
+    }
+    // Reset flag when switching to a new record without itemName
+    if (!initialData?.sale?.itemName) {
+      hasInitializedItemSelection.current = false
+    }
+  }, [initialData?.sale?.itemName, allInventoryItems]) // Only depend on initialData.itemName and allInventoryItems
 
-  const designOwnership = watch('design.ownership') || []
-  const watchedStatus = watch('status')
-  const preview = watch()
+  // Update shouldShowDropdown based on debounced client name - only when it changes on blur
+  useEffect(() => {
+    if (debouncedClientName && filteredInventoryItems.length > 0) {
+      setShouldShowDropdown(true)
+    } else {
+      setShouldShowDropdown(false)
+    }
+    
+    // Clear selection if client name becomes empty
+    const prevClientName = prevClientNameRef.current
+    if (prevClientName && prevClientName.trim() !== '' && (!debouncedClientName || debouncedClientName.trim() === '')) {
+      setSelectedInventoryItemId(null)
+      setValue('sale.itemName', '', { shouldDirty: false })
+      setValue('sale.rawMaterial', '', { shouldDirty: false })
+      hasInitializedItemSelection.current = false
+      setShouldShowDropdown(false)
+    }
+    
+    // Update ref
+    if (prevClientName !== debouncedClientName) {
+      prevClientNameRef.current = debouncedClientName
+    }
+  }, [debouncedClientName, filteredInventoryItems.length, setValue])
 
   const toggleDesignOwnership = (option: typeof DESIGN_CHOICES[number]) => {
     const current = designOwnership || []
@@ -397,7 +555,46 @@ export default function JobCardForm({
     setValue('design.ownership', updated, { shouldDirty: true })
   }
 
+  // Handle item selection
+  const handleItemSelect = (itemId: string) => {
+    const selectedItem = filteredInventoryItems.find(item => item.id === itemId)
+    if (selectedItem) {
+      setSelectedInventoryItemId(itemId)
+      setValue('sale.itemName', selectedItem.item, { shouldDirty: true })
+      // Auto-fill raw material with material grade and size
+      const rawMaterialParts = []
+      if (selectedItem.materialGrade) rawMaterialParts.push(selectedItem.materialGrade)
+      if (selectedItem.size) rawMaterialParts.push(selectedItem.size)
+      if (rawMaterialParts.length > 0) {
+        setValue('sale.rawMaterial', rawMaterialParts.join(' / '), { shouldDirty: true })
+      }
+    }
+  }
+
   const handleFormSubmit = async (data: JobCardFormData) => {
+    // Reduce inventory stock if item and quantity are provided
+    if (selectedInventoryItemId && data.sale.quantity) {
+      const qty = parseFloat(data.sale.quantity)
+      if (!isNaN(qty) && qty > 0) {
+        // Reload inventory items to get fresh stock data
+        const rawMaterialItems = loadInventoryItems('raw_material', false)
+        const toolItems = loadInventoryItems('tool', false)
+        const freshInventoryItems = [...rawMaterialItems, ...toolItems]
+        const selectedItem = freshInventoryItems.find(item => item.id === selectedInventoryItemId)
+        if (selectedItem) {
+          if (selectedItem.availableStock < qty) {
+            alert(`Insufficient stock for ${selectedItem.item}. Available: ${selectedItem.availableStock}, Requested: ${qty}`)
+            return // Prevent form submission if insufficient stock
+          }
+          const success = reduceInventoryStock(selectedInventoryItemId, qty, selectedItem.type)
+          if (!success) {
+            alert(`Failed to reduce inventory stock for ${selectedItem.item}`)
+            return // Prevent form submission if stock reduction fails
+          }
+        }
+      }
+    }
+    
     await onSubmit(data)
     setSubmitted(true)
     setTimeout(() => setSubmitted(false), 2500)
@@ -510,7 +707,12 @@ export default function JobCardForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs uppercase text-slate-500">Client Name</Label>
-            <Input placeholder="Company / customer" {...register('sale.clientName')} />
+            <Input 
+              placeholder="Company / customer" 
+              {...register('sale.clientName', {
+                onBlur: updatePreviewOnBlur
+              })} 
+            />
             {errors.sale?.clientName && <p className="text-xs text-destructive">{errors.sale.clientName.message}</p>}
           </div>
           <div className="space-y-1">
@@ -519,7 +721,12 @@ export default function JobCardForm({
             </div>
             <div className="space-y-1">
             <Label className="text-xs uppercase text-slate-500">Contact Person</Label>
-            <Input placeholder="Primary contact" {...register('sale.contactPerson')} />
+            <Input 
+              placeholder="Primary contact" 
+              {...register('sale.contactPerson', {
+                onBlur: updatePreviewOnBlur
+              })} 
+            />
             </div>
             <div className="space-y-1">
             <Label className="text-xs uppercase text-slate-500">Contact Phone</Label>
@@ -529,7 +736,33 @@ export default function JobCardForm({
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs uppercase text-slate-500">Item Name</Label>
-            <Input placeholder="Component / assembly" {...register('sale.itemName')} />
+            {shouldShowDropdown ? (
+              <Select
+                value={selectedInventoryItemId || ''}
+                onValueChange={handleItemSelect}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select item from inventory">
+                    {selectedInventoryItemId 
+                      ? filteredInventoryItems.find(item => item.id === selectedInventoryItemId)?.item || "Select item from inventory"
+                      : "Select item from inventory"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredInventoryItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.item} - {item.materialGrade || 'N/A'} - Stock: {item.availableStock}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input 
+                placeholder={debouncedClientName ? "No inventory items found for this client" : "Enter client name first"} 
+                {...register('sale.itemName')} 
+                disabled={!!debouncedClientName && filteredInventoryItems.length === 0}
+              />
+            )}
             </div>
               <div className="space-y-1">
             <Label className="text-xs uppercase text-slate-500">Item Description</Label>
@@ -820,3 +1053,4 @@ export default function JobCardForm({
     </form>
   )
 }
+

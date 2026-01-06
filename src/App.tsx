@@ -34,6 +34,9 @@ import CLITSheetEditorPage from './pages/CLITSheetEditorPage'
 import CLITSheetDetailPage from './pages/CLITSheetDetailPage'
 import MaintenanceMasterManagement from './pages/MaintenanceMasterManagement'
 import QCInspectionPage from './pages/QCInspectionPage'
+import PurchaseManagement from './pages/PurchaseManagement'
+import InventoryManagement from './pages/InventoryManagement'
+import SubcontractingManagement from './pages/SubcontractingManagement'
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth()
@@ -183,6 +186,18 @@ function AppRoutes() {
       <Route
         path="/qc-inspection"
         element={isAuthenticated ? <QCInspectionPage /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/purchase"
+        element={isAuthenticated ? <PurchaseManagement /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/inventory"
+        element={isAuthenticated ? <InventoryManagement /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/subcontracting"
+        element={isAuthenticated ? <SubcontractingManagement /> : <Navigate to="/login" replace />}
       />
       {/* Public Inquiry Form - No authentication required */}
       <Route 

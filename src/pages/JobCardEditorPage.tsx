@@ -103,7 +103,7 @@ export default function JobCardEditorPage() {
     } else if (!initialData) {
       setInitialData(undefined)
     }
-  }, [id, isEditing, location.pathname, location.state, navigate, initialData])
+  }, [id, isEditing, location.pathname, location.state, navigate]) // Removed initialData to prevent loops
 
   const handleSubmit = async (data: JobCardFormData) => {
     setIsSaving(true)
